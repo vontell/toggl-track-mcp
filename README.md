@@ -22,62 +22,96 @@ A Model Context Protocol (MCP) server for Toggl Track time tracking integration.
 
 ## Quick Start
 
-### 1. Installation
+### 1. Get Your Toggl Track API Token
 
-Create a virtual environment (recommended):
+1. Go to your [Toggl Track profile settings](https://track.toggl.com/profile)
+2. Copy your API token from the "API Token" section
+3. Keep this token handy for the configuration step
+
+### 2. Build the Docker Image
+
+Clone this repository and build the Docker image:
+
+```bash
+git clone git@github.com:vontell/toggl-track-mcp.git
+cd toggl-track-mcp
+docker build -t toggl-track-mcp .
+```
+
+### 3. Configure Claude Desktop
+
+Add the server to your Claude Desktop configuration file:
+
+**Location:** `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+
+```json
+{
+  "mcpServers": {
+    "Toggl Track": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "TOGGL_API_TOKEN",
+        "toggl-track-mcp"
+      ],
+      "env": {
+        "TOGGL_API_TOKEN": "your_api_token_here"
+      }
+    }
+  }
+}
+```
+
+**Important:** Replace `"your_api_token_here"` with your actual Toggl Track API token.
+
+### 4. Restart Claude Desktop
+
+After updating the configuration, restart Claude Desktop to load the new MCP server.
+
+### 5. Verify Installation
+
+Once restarted, you should be able to ask Claude questions like:
+- "What projects do I have in Toggl Track?"
+- "Start a timer for 'Code review'"
+- "What's my current timer status?"
+
+---
+
+## Development Setup
+
+For development and testing:
+
+### Local Development
+
+Create a virtual environment:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-Install the required dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
-
-Get your Toggl Track API token:
-
-1. Go to your [Toggl Track profile settings](https://track.toggl.com/profile)
-2. Copy your API token from the "API Token" section
-
-Set your API token as an environment variable:
+Set your API token:
 
 ```bash
 export TOGGL_API_TOKEN="your_api_token_here"
 ```
 
-Or create a `.env` file (copy from `.env.example`):
-
-```bash
-cp .env.example .env
-# Edit .env file with your API token
-```
-
-### 3. Running the Server
-
-#### Development Mode (with MCP Inspector)
+### Testing with MCP Inspector
 
 ```bash
 mcp dev server.py
 ```
 
-This opens the MCP Inspector for testing your server interactively.
-
-#### Install in Claude Desktop
-
-```bash
-mcp install server.py
-```
-
-#### Direct Execution
-
-```bash
-python server.py
-```
+This opens the MCP Inspector for interactive testing.
 
 ## Available Tools
 

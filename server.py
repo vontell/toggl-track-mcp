@@ -125,6 +125,59 @@ class TogglClient:
             else:
                 error_text = await response.text()
                 raise Exception(f"Failed to get current time entry: {response.status} - {error_text}")
+    
+    async def start_timer(self, workspace_id: int, description: str, project_id: Optional[int] = None) -> Dict[str, Any]:
+        """Start a new timer
+        
+        Args:
+            workspace_id: ID of the workspace
+            description: Description for the time entry
+            project_id: Optional project ID to assign the time entry to
+        """
+        if not self.session:
+            raise RuntimeError("Client not initialized. Use async context manager.")
+        
+        # Create time entry data
+        now = datetime.utcnow().isoformat() + "Z"
+        data = {
+            "created_with": "Toggl Track MCP Server",
+            "description": description,
+            "workspace_id": workspace_id,
+            "duration": -1,  # -1 indicates running timer
+            "start": now,
+            "stop": None,
+            "tags": [],
+            "billable": False
+        }
+        
+        if project_id:
+            data["project_id"] = project_id
+        
+        url = f"{TOGGL_API_BASE}/workspaces/{workspace_id}/time_entries"
+        async with self.session.post(url, json=data) as response:
+            if response.status in [200, 201]:
+                return await response.json()
+            else:
+                error_text = await response.text()
+                raise Exception(f"Failed to start timer: {response.status} - {error_text}")
+    
+    async def stop_timer(self, workspace_id: int, time_entry_id: int) -> Dict[str, Any]:
+        """Stop a running timer
+        
+        Args:
+            workspace_id: ID of the workspace
+            time_entry_id: ID of the time entry to stop
+        """
+        if not self.session:
+            raise RuntimeError("Client not initialized. Use async context manager.")
+        
+        url = f"{TOGGL_API_BASE}/workspaces/{workspace_id}/time_entries/{time_entry_id}/stop"
+        async with self.session.patch(url) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                error_text = await response.text()
+                raise Exception(f"Failed to stop timer: {response.status} - {error_text}")
 
 
 def get_api_token() -> str:
@@ -466,6 +519,139 @@ async def get_current_timer() -> str:
 
 
 @mcp.tool()
+async def start_timer(description: str, project_name: str = "") -> str:
+    """
+    Start a new timer in Toggl Track.
+    
+    Args:
+        description: Description for the time entry
+        project_name: Name of the project to assign the timer to (optional)
+    
+    Returns confirmation of timer start with details.
+    """
+    try:
+        api_token = get_api_token()
+        
+        async with TogglClient(api_token) as client:
+            # Get workspaces to find the primary one
+            workspaces = await client.get_workspaces()
+            if not workspaces:
+                return "No workspaces found. Cannot start timer."
+            
+            # Use the first workspace (most users have one)
+            workspace_id = workspaces[0].get("id")
+            workspace_name = workspaces[0].get("name", "Unknown")
+            
+            # Get project ID if project name specified
+            project_id = None
+            if project_name:
+                projects = await client.get_projects()
+                for project in projects:
+                    if project.get("name") == project_name:
+                        project_id = project.get("id")
+                        break
+                
+                if not project_id:
+                    available_projects = [p.get("name", "") for p in projects]
+                    return f"Project '{project_name}' not found. Available projects: {', '.join(available_projects)}"
+            
+            # Start the timer
+            result = await client.start_timer(workspace_id, description, project_id)
+            
+            # Format response
+            timer_id = result.get("id")
+            start_time = result.get("start", "")[:16].replace("T", " ") if result.get("start") else ""
+            
+            response = f"**Timer Started Successfully!**\n\n"
+            response += f"• **Description**: {description}\n"
+            response += f"• **Project**: {project_name if project_name else 'No project'}\n"
+            response += f"• **Workspace**: {workspace_name}\n"
+            response += f"• **Started**: {start_time}\n"
+            response += f"• **Timer ID**: {timer_id}\n"
+            
+            return response
+            
+    except ValueError as e:
+        return f"Configuration error: {str(e)}"
+    except Exception as e:
+        return f"Error starting timer: {str(e)}"
+
+
+@mcp.tool()
+async def stop_current_timer() -> str:
+    """
+    Stop the currently running timer in Toggl Track.
+    
+    Returns confirmation of timer stop with duration details.
+    """
+    try:
+        api_token = get_api_token()
+        
+        async with TogglClient(api_token) as client:
+            # Get current running timer
+            current_entry = await client.get_current_time_entry()
+            
+            if not current_entry:
+                return "No timer is currently running."
+            
+            # Get workspace info
+            workspaces = await client.get_workspaces()
+            workspace_id = None
+            workspace_name = "Unknown"
+            
+            entry_workspace_id = current_entry.get("workspace_id")
+            for workspace in workspaces:
+                if workspace.get("id") == entry_workspace_id:
+                    workspace_id = entry_workspace_id
+                    workspace_name = workspace.get("name", "Unknown")
+                    break
+            
+            if not workspace_id:
+                return "Could not determine workspace for current timer."
+            
+            # Stop the timer
+            time_entry_id = current_entry.get("id")
+            result = await client.stop_timer(workspace_id, time_entry_id)
+            
+            # Calculate duration
+            description = current_entry.get("description", "No description")
+            start_time = current_entry.get("start", "")
+            stop_time = result.get("stop", "")
+            duration = result.get("duration", 0)
+            
+            if duration > 0:
+                hours = duration // 3600
+                minutes = (duration % 3600) // 60
+                duration_str = f"{hours}h {minutes}m"
+            else:
+                duration_str = "Unknown duration"
+            
+            # Get project name
+            project_id = current_entry.get("project_id")
+            project_name = "No project"
+            if project_id:
+                projects = await client.get_projects()
+                for project in projects:
+                    if project.get("id") == project_id:
+                        project_name = project.get("name", "Unknown project")
+                        break
+            
+            response = f"**Timer Stopped Successfully!**\n\n"
+            response += f"• **Description**: {description}\n"
+            response += f"• **Project**: {project_name}\n"
+            response += f"• **Duration**: {duration_str}\n"
+            response += f"• **Started**: {start_time[:16].replace('T', ' ') if start_time else 'Unknown'}\n"
+            response += f"• **Stopped**: {stop_time[:16].replace('T', ' ') if stop_time else 'Unknown'}\n"
+            
+            return response
+            
+    except ValueError as e:
+        return f"Configuration error: {str(e)}"
+    except Exception as e:
+        return f"Error stopping timer: {str(e)}"
+
+
+@mcp.tool()
 async def search_time_entries(query: str, start_date: str = "", end_date: str = "") -> str:
     """
     Search time entries by description text with optional date filtering.
@@ -790,6 +976,38 @@ def project_deep_dive(project_name: str, days: str = "30") -> str:
 def search_by_description(query: str, days: str = "30") -> str:
     """Generate a prompt to search time entries by description"""
     return f"Please search my time entries for '{query}' over the last {days} days and show me the total time spent on related activities."
+
+
+@mcp.prompt()
+def quick_start_timer(description: str, project_name: str = "") -> str:
+    """Generate a prompt to quickly start a timer"""
+    prompt = f"Please start a timer with description '{description}'"
+    if project_name:
+        prompt += f" for project '{project_name}'"
+    prompt += ". Confirm when the timer has started."
+    return prompt
+
+
+@mcp.prompt()
+def stop_and_start_new(new_description: str, project_name: str = "") -> str:
+    """Generate a prompt to stop current timer and start a new one"""
+    prompt = f"Please stop my current timer and start a new one with description '{new_description}'"
+    if project_name:
+        prompt += f" for project '{project_name}'"
+    prompt += ". Show me the duration of the stopped timer and confirm the new timer has started."
+    return prompt
+
+
+@mcp.prompt()
+def timer_status_and_control() -> str:
+    """Generate a prompt to check timer status and offer controls"""
+    return "Please check my current timer status. If I have a timer running, show me the details and ask if I want to stop it. If no timer is running, ask if I want to start one."
+
+
+@mcp.prompt()
+def work_session_timer(project_name: str, duration: str = "1 hour") -> str:
+    """Generate a prompt to start a focused work session timer"""
+    return f"I want to start a focused {duration} work session on '{project_name}'. Please start a timer and remind me to take breaks."
 
 
 if __name__ == "__main__":

@@ -8,7 +8,8 @@
       "WebFetch(domain:developers.track.toggl.com)",
       "Bash(/Library/Frameworks/Python.framework/Versions/3.12/bin/uv run --with \"mcp[cli]\" mcp run server.py)",
       "Bash(chmod:*)",
-      "Bash(docker build:*)"
+      "Bash(docker build:*)",
+      "Bash(grep:*)"
     ]
   },
   "enableAllProjectMcpServers": false

@@ -15,6 +15,7 @@ A Model Context Protocol (MCP) server for Toggl Track time tracking integration.
 - **Time Summary**: Aggregated time reports by project with percentages
 - **Current Timer**: Check what's currently running and elapsed time
 - **Timer Control**: Start new timers and stop current running timers
+- **Task Management**: Create and retrieve project tasks with time estimates
 - **Search Entries**: Find time entries by description text
 - **Smart Prompts**: Pre-built conversation starters for common time tracking queries
 - Secure API token authentication
@@ -184,6 +185,32 @@ Search time entries by description:
 - **end_date**: End date for search range (optional, defaults to today)
 - Case-insensitive search with total time calculation
 
+### `get_project_tasks`
+
+Get all tasks for a specific project:
+
+- **project_name**: Name of the project to get tasks for (required)
+- Shows task names, IDs, status (active/inactive), and estimated time
+- Returns helpful error if project not found
+
+### `create_project_task`
+
+Create a new task for a project:
+
+- **project_name**: Name of the project to create the task in (required)
+- **task_name**: Name of the new task (required)
+- **estimated_hours**: Estimated hours for the task (optional)
+- Returns confirmation with task ID and details
+
+### `get_all_tasks`
+
+Get all tasks across all projects:
+
+- Shows tasks organized by project and workspace
+- Displays task names, IDs, status, and estimated time
+- Returns total count of tasks found
+- Skips projects without task access gracefully
+
 ## Example Prompts
 
 The server includes pre-built prompts for common scenarios:
@@ -203,6 +230,13 @@ The server includes pre-built prompts for common scenarios:
 - **stop_and_start_new**: Stop current timer and start a new one
 - **timer_status_and_control**: Check status and get timer control options
 - **work_session_timer**: Start a focused work session with break reminders
+
+### Task Management
+- **view_project_tasks**: View all tasks for a specific project
+- **create_new_task**: Create a new task with optional time estimates
+- **task_planning_session**: Plan and organize tasks for a project
+- **project_task_overview**: Get overview of tasks across all projects
+- **list_all_tasks**: List all tasks across all projects with details
 
 ## Example Usage
 
@@ -229,6 +263,13 @@ Once installed in Claude Desktop, you can ask:
 - "Stop my current timer"
 - "Start a timer for 'Planning session'"
 
+### Task Management
+- "Show me all tasks for project XYZ"
+- "Create a new task called 'Database migration' for project ABC"
+- "Create a task with 4 hours estimated time"
+- "Help me plan tasks for my current project"
+- "List all tasks across all my projects"
+
 ## API Reference
 
 This server uses the [Toggl Track API v9](https://developers.track.toggl.com/docs/). Key endpoints used:
@@ -239,6 +280,8 @@ This server uses the [Toggl Track API v9](https://developers.track.toggl.com/doc
 - `GET /api/v9/me/time_entries/current` - Get current running timer
 - `POST /api/v9/workspaces/{id}/time_entries` - Start new timer
 - `PATCH /api/v9/workspaces/{id}/time_entries/{id}/stop` - Stop timer
+- `GET /api/v9/workspaces/{id}/projects/{id}/tasks` - Get project tasks
+- `POST /api/v9/workspaces/{id}/projects/{id}/tasks` - Create new task
 
 ## Development
 

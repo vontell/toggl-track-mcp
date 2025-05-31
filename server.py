@@ -178,6 +178,54 @@ class TogglClient:
             else:
                 error_text = await response.text()
                 raise Exception(f"Failed to stop timer: {response.status} - {error_text}")
+    
+    async def get_tasks(self, workspace_id: int, project_id: int) -> List[Dict[str, Any]]:
+        """Get all tasks for a project
+        
+        Args:
+            workspace_id: ID of the workspace
+            project_id: ID of the project
+        """
+        if not self.session:
+            raise RuntimeError("Client not initialized. Use async context manager.")
+        
+        url = f"{TOGGL_API_BASE}/workspaces/{workspace_id}/projects/{project_id}/tasks"
+        async with self.session.get(url) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                error_text = await response.text()
+                raise Exception(f"Failed to get tasks: {response.status} - {error_text}")
+    
+    async def create_task(self, workspace_id: int, project_id: int, name: str, 
+                         estimated_seconds: Optional[int] = None, active: bool = True) -> Dict[str, Any]:
+        """Create a new task for a project
+        
+        Args:
+            workspace_id: ID of the workspace
+            project_id: ID of the project
+            name: Name of the task
+            estimated_seconds: Estimated time in seconds (optional)
+            active: Whether the task is active (default: True)
+        """
+        if not self.session:
+            raise RuntimeError("Client not initialized. Use async context manager.")
+        
+        data = {
+            "name": name,
+            "active": active
+        }
+        
+        if estimated_seconds is not None:
+            data["estimated_seconds"] = estimated_seconds
+        
+        url = f"{TOGGL_API_BASE}/workspaces/{workspace_id}/projects/{project_id}/tasks"
+        async with self.session.post(url, json=data) as response:
+            if response.status in [200, 201]:
+                return await response.json()
+            else:
+                error_text = await response.text()
+                raise Exception(f"Failed to create task: {response.status} - {error_text}")
 
 
 def get_api_token() -> str:
@@ -890,6 +938,231 @@ async def get_time_entries_fixed(start_date: str = "", end_date: str = "", proje
         return f"Error fetching time entries: {str(e)}"
 
 
+@mcp.tool()
+async def get_project_tasks(project_name: str) -> str:
+    """
+    Get all tasks for a specific project.
+    
+    Args:
+        project_name: Name of the project to get tasks for
+    
+    Returns list of tasks with their details.
+    """
+    try:
+        api_token = get_api_token()
+        
+        async with TogglClient(api_token) as client:
+            # Get workspaces and projects
+            workspaces = await client.get_workspaces()
+            projects = await client.get_projects()
+            
+            if not workspaces:
+                return "No workspaces found."
+            
+            # Find the project
+            project_id = None
+            project_found = None
+            for project in projects:
+                if project.get("name") == project_name:
+                    project_id = project.get("id")
+                    project_found = project
+                    break
+            
+            if not project_id:
+                available_projects = [p.get("name", "") for p in projects]
+                return f"Project '{project_name}' not found. Available projects: {', '.join(available_projects)}"
+            
+            # Get workspace ID for the project
+            workspace_id = project_found.get("workspace_id")
+            if not workspace_id:
+                return f"Could not determine workspace for project '{project_name}'."
+            
+            # Get tasks for the project
+            tasks = await client.get_tasks(workspace_id, project_id)
+            
+            if not tasks:
+                return f"No tasks found for project '{project_name}'."
+            
+            # Format the tasks
+            result = f"Tasks for project '{project_name}':\n\n"
+            
+            for task in tasks:
+                name = task.get("name", "Unnamed Task")
+                task_id = task.get("id", "Unknown")
+                active = task.get("active", True)
+                estimated_seconds = task.get("estimated_seconds")
+                
+                status = "Active" if active else "Inactive"
+                
+                result += f"• **{name}** (ID: {task_id})\n"
+                result += f"  - Status: {status}\n"
+                
+                if estimated_seconds:
+                    hours = estimated_seconds // 3600
+                    minutes = (estimated_seconds % 3600) // 60
+                    result += f"  - Estimated: {hours}h {minutes}m\n"
+                
+                result += "\n"
+            
+            return result
+            
+    except ValueError as e:
+        return f"Configuration error: {str(e)}"
+    except Exception as e:
+        return f"Error fetching tasks: {str(e)}"
+
+
+@mcp.tool()
+async def create_project_task(project_name: str, task_name: str, estimated_hours: float = 0) -> str:
+    """
+    Create a new task for a specific project.
+    
+    Args:
+        project_name: Name of the project to create the task in
+        task_name: Name of the new task
+        estimated_hours: Estimated hours for the task (optional)
+    
+    Returns confirmation of task creation.
+    """
+    try:
+        api_token = get_api_token()
+        
+        async with TogglClient(api_token) as client:
+            # Get workspaces and projects
+            workspaces = await client.get_workspaces()
+            projects = await client.get_projects()
+            
+            if not workspaces:
+                return "No workspaces found."
+            
+            # Find the project
+            project_id = None
+            project_found = None
+            for project in projects:
+                if project.get("name") == project_name:
+                    project_id = project.get("id")
+                    project_found = project
+                    break
+            
+            if not project_id:
+                available_projects = [p.get("name", "") for p in projects]
+                return f"Project '{project_name}' not found. Available projects: {', '.join(available_projects)}"
+            
+            # Get workspace ID for the project
+            workspace_id = project_found.get("workspace_id")
+            if not workspace_id:
+                return f"Could not determine workspace for project '{project_name}'."
+            
+            # Convert estimated hours to seconds
+            estimated_seconds = None
+            if estimated_hours > 0:
+                estimated_seconds = int(estimated_hours * 3600)
+            
+            # Create the task
+            result = await client.create_task(workspace_id, project_id, task_name, estimated_seconds)
+            
+            # Format response
+            task_id = result.get("id")
+            active = result.get("active", True)
+            status = "Active" if active else "Inactive"
+            
+            response = f"**Task Created Successfully!**\n\n"
+            response += f"• **Task Name**: {task_name}\n"
+            response += f"• **Project**: {project_name}\n"
+            response += f"• **Task ID**: {task_id}\n"
+            response += f"• **Status**: {status}\n"
+            
+            if estimated_hours > 0:
+                response += f"• **Estimated Time**: {estimated_hours}h\n"
+            
+            return response
+            
+    except ValueError as e:
+        return f"Configuration error: {str(e)}"
+    except Exception as e:
+        return f"Error creating task: {str(e)}"
+
+
+@mcp.tool()
+async def get_all_tasks() -> str:
+    """
+    Get all tasks across all projects in the workspace.
+    
+    Returns a comprehensive list of all tasks organized by project.
+    """
+    try:
+        api_token = get_api_token()
+        
+        async with TogglClient(api_token) as client:
+            # Get workspaces and projects
+            workspaces = await client.get_workspaces()
+            projects = await client.get_projects()
+            
+            if not workspaces:
+                return "No workspaces found."
+            
+            if not projects:
+                return "No projects found."
+            
+            # Group projects by workspace for organization
+            workspace_map = {ws.get("id"): ws.get("name", "Unknown") for ws in workspaces}
+            
+            result = "All Tasks Across Projects:\n\n"
+            total_tasks = 0
+            
+            for project in projects:
+                project_name = project.get("name", "Unnamed Project")
+                project_id = project.get("id")
+                workspace_id = project.get("workspace_id")
+                
+                if not project_id or not workspace_id:
+                    continue
+                
+                try:
+                    # Get tasks for this project
+                    tasks = await client.get_tasks(workspace_id, project_id)
+                    
+                    if tasks:
+                        # Add project header
+                        result += f"**{project_name}** ({workspace_map.get(workspace_id, 'Unknown Workspace')})\n"
+                        
+                        for task in tasks:
+                            name = task.get("name", "Unnamed Task")
+                            task_id = task.get("id", "Unknown")
+                            active = task.get("active", True)
+                            estimated_seconds = task.get("estimated_seconds")
+                            
+                            status = "Active" if active else "Inactive"
+                            
+                            result += f"  • **{name}** (ID: {task_id})\n"
+                            result += f"    - Status: {status}\n"
+                            
+                            if estimated_seconds:
+                                hours = estimated_seconds // 3600
+                                minutes = (estimated_seconds % 3600) // 60
+                                result += f"    - Estimated: {hours}h {minutes}m\n"
+                            
+                            total_tasks += 1
+                        
+                        result += "\n"
+                        
+                except Exception as e:
+                    # Skip projects that can't be accessed (might not have tasks enabled)
+                    continue
+            
+            if total_tasks == 0:
+                return "No tasks found across any projects."
+            
+            result += f"**Total Tasks Found: {total_tasks}**\n"
+            
+            return result
+            
+    except ValueError as e:
+        return f"Configuration error: {str(e)}"
+    except Exception as e:
+        return f"Error fetching all tasks: {str(e)}"
+
+
 @mcp.prompt()
 def start_time_tracking(project_name: str, description: str = "") -> str:
     """Generate a prompt to start time tracking for a project"""
@@ -1008,6 +1281,40 @@ def timer_status_and_control() -> str:
 def work_session_timer(project_name: str, duration: str = "1 hour") -> str:
     """Generate a prompt to start a focused work session timer"""
     return f"I want to start a focused {duration} work session on '{project_name}'. Please start a timer and remind me to take breaks."
+
+
+@mcp.prompt()
+def view_project_tasks(project_name: str) -> str:
+    """Generate a prompt to view all tasks for a project"""
+    return f"Please show me all tasks for the project '{project_name}' with their current status and estimated time."
+
+
+@mcp.prompt()
+def create_new_task(project_name: str, task_name: str, estimated_hours: str = "") -> str:
+    """Generate a prompt to create a new task"""
+    prompt = f"Please create a new task called '{task_name}' for project '{project_name}'"
+    if estimated_hours:
+        prompt += f" with an estimated time of {estimated_hours} hours"
+    prompt += ". Confirm when the task has been created."
+    return prompt
+
+
+@mcp.prompt()
+def task_planning_session(project_name: str) -> str:
+    """Generate a prompt for planning tasks for a project"""
+    return f"I want to plan out tasks for the project '{project_name}'. Please show me existing tasks and help me create new ones based on the project requirements."
+
+
+@mcp.prompt()
+def project_task_overview() -> str:
+    """Generate a prompt for a comprehensive task overview across projects"""
+    return "Please give me an overview of tasks across all my projects. Show me which projects have tasks, what needs attention, and help me prioritize my work."
+
+
+@mcp.prompt()
+def list_all_tasks() -> str:
+    """Generate a prompt to list all tasks across all projects"""
+    return "Please show me all tasks across all my projects, organized by project. Include task status and estimated time for each task."
 
 
 if __name__ == "__main__":

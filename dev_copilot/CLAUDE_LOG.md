@@ -279,4 +279,111 @@ Users can now say:
 
 ---
 
-*This extended session added comprehensive timer control capabilities, completing the full time tracking workflow from analysis to active timer management.*
+## 🔄 Session 3: Task Management Features
+
+**Date:** May 31, 2025 (Extended Session)  
+**Focus:** Adding task creation and retrieval functionality
+
+### New Features Added
+
+#### 1. Task Management API Integration
+- **`get_tasks()` method**: Retrieve all tasks for a project
+- **`create_task()` method**: Create new tasks with optional time estimates
+- **Enhanced TogglClient**: Added project-aware task operations
+
+#### 2. MCP Tools for Task Management
+- **`get_project_tasks`**: View all tasks for a specific project
+  - Shows task names, IDs, status (active/inactive), and estimated time
+  - Project name validation with helpful suggestions
+  - Clear formatting with task details
+- **`create_project_task`**: Create new tasks for projects
+  - Required project name and task name
+  - Optional estimated hours with automatic conversion to seconds
+  - Rich confirmation output with task details
+
+#### 3. Task Management Prompts
+- **`view_project_tasks`**: View all tasks for a project with status
+- **`create_new_task`**: Create new task with optional time estimates
+- **`task_planning_session`**: Plan and organize project tasks
+- **`project_task_overview`**: Overview of tasks across all projects
+
+### Technical Implementation
+
+#### API Endpoints Integrated
+- `GET /api/v9/workspaces/{id}/projects/{id}/tasks` - Get project tasks
+- `POST /api/v9/workspaces/{id}/projects/{id}/tasks` - Create new task
+- Enhanced error handling for project and workspace resolution
+
+#### Key Features
+- **Project Validation**: Name-to-ID resolution with error suggestions
+- **Time Estimate Conversion**: Hours to seconds for API compatibility
+- **Rich Output Formatting**: Detailed task information display
+- **Status Tracking**: Active/inactive task status management
+
+### User Experience Improvements
+
+#### Natural Language Commands
+Users can now say:
+- "Show me all tasks for project ABC"
+- "Create a new task called 'Database migration' for project XYZ"
+- "Create a task with 4 hours estimated time"
+- "Help me plan tasks for my current project"
+
+#### Error Handling
+- Clear project not found messages with available options
+- Workspace resolution for multi-workspace scenarios
+- Validation of required task parameters
+
+### Documentation Updates
+- **README**: Added task management tools and examples
+- **API Reference**: Documented new task endpoints
+- **Example Usage**: Task management scenarios
+
+---
+
+## 📊 Complete Feature Summary
+
+### Tools (12 Total)
+1. `get_projects` - List all projects
+2. `get_workspaces` - List all workspaces  
+3. `get_time_entries` - Basic time entries with filtering
+4. `get_time_summary` - Aggregated project summaries
+5. `get_current_timer` - Active timer status
+6. `search_time_entries` - Description-based search
+7. `get_time_entries_fixed` - Enhanced date handling
+8. `start_timer` - Start new timers
+9. `stop_current_timer` - Stop running timers
+10. **`get_project_tasks` - View project tasks** ✨ **NEW**
+11. **`create_project_task` - Create new tasks** ✨ **NEW**
+12. **`get_all_tasks` - List all tasks across projects** ✨ **NEW**
+
+### Prompts (20 Total)
+**Time Tracking & Analysis (11):**
+1. `start_time_tracking` - Project time tracking prompts
+2. `weekly_time_report` - Weekly summary requests
+3. `project_time_analysis` - Project-specific analysis
+4. `optimize_workflow` - Productivity optimization
+5. `project_overview` - All projects overview
+6. `detailed_time_report` - Detailed time breakdowns
+7. `time_summary_report` - Summary by project
+8. `productivity_analysis` - Work pattern analysis
+9. `current_status_check` - Current status and today's work
+10. `project_deep_dive` - In-depth project analysis
+11. `search_by_description` - Description search prompts
+
+**Timer Control (4):**
+12. `quick_start_timer` - Fast timer start
+13. `stop_and_start_new` - Stop and restart workflow
+14. `timer_status_and_control` - Interactive timer management
+15. `work_session_timer` - Focused work sessions
+
+**Task Management (5):** ✨ **NEW**
+16. **`view_project_tasks` - View project tasks**
+17. **`create_new_task` - Create new tasks**
+18. **`task_planning_session` - Plan project tasks**
+19. **`project_task_overview` - Overview across projects**
+20. **`list_all_tasks` - List all tasks across projects**
+
+---
+
+*This extended session added comprehensive task management capabilities, enabling full project planning and organization within the time tracking workflow.*
